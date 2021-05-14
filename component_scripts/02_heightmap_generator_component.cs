@@ -1,0 +1,851 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+
+using Rhino;
+using Rhino.Geometry;
+
+using Grasshopper;
+using Grasshopper.Kernel;
+using Grasshopper.Kernel.Data;
+using Grasshopper.Kernel.Types;
+
+using System.IO;
+using System.Drawing;
+using System.Reflection;
+using System.Linq;
+
+/// <summary>
+/// This class will be instantiated on demand by the Script component.
+/// </summary>
+public class Script_Instance : GH_ScriptInstance
+{
+#region Utility functions
+  /// <summary>Print a String to the [Out] Parameter of the Script component.</summary>
+  /// <param name="text">String to print.</param>
+  private void Print(string text) { /* Implementation hidden. */ }
+  /// <summary>Print a formatted String to the [Out] Parameter of the Script component.</summary>
+  /// <param name="format">String format.</param>
+  /// <param name="args">Formatting parameters.</param>
+  private void Print(string format, params object[] args) { /* Implementation hidden. */ }
+  /// <summary>Print useful information about an object instance to the [Out] Parameter of the Script component. </summary>
+  /// <param name="obj">Object instance to parse.</param>
+  private void Reflect(object obj) { /* Implementation hidden. */ }
+  /// <summary>Print the signatures of all the overloads of a specific method to the [Out] Parameter of the Script component. </summary>
+  /// <param name="obj">Object instance to parse.</param>
+  private void Reflect(object obj, string method_name) { /* Implementation hidden. */ }
+#endregion
+
+#region Members
+  /// <summary>Gets the current Rhino document.</summary>
+  private readonly RhinoDoc RhinoDocument;
+  /// <summary>Gets the Grasshopper document that owns this script.</summary>
+  private readonly GH_Document GrasshopperDocument;
+  /// <summary>Gets the Grasshopper script component that owns this script.</summary>
+  private readonly IGH_Component Component;
+  /// <summary>
+  /// Gets the current iteration count. The first call to RunScript() is associated with Iteration==0.
+  /// Any subsequent call within the same solution will increment the Iteration count.
+  /// </summary>
+  private readonly int Iteration;
+#endregion
+
+  /// <summary>
+  /// This procedure contains the user code. Input parameters are provided as regular arguments,
+  /// Output parameters as ref arguments. You don't have to assign output parameters,
+  /// they will have a default value.
+  /// </summary>
+  private void RunScript(List<int> userInput, ref object Path, ref object Percentages, ref object Genes)
+  {
+
+    // RUNTIME CODE
+
+    if(userInput != null)
+    {
+      // Create a new Bitmap of size 128 by 128
+      BitmapGenerator bg = new BitmapGenerator(128);
+
+      // Determine GA parameters based on received user input
+      fitnessCriteria = userInput[1];
+      if (fitnessCriteria == 0) desiredFeatures = new double[3] {userInput[0], 0, 0};
+      else if (fitnessCriteria == 1) desiredFeatures = new double[3] {0, userInput[0], 0};
+      else if (fitnessCriteria == 2) desiredFeatures = new double[3] {0, 0, userInput[0]};
+      else desiredFeatures = null;
+
+      // Using L-Systems and image processing, generate a height map.
+      bg.generateBitmap();
+      // Record percentages of height-classified areas
+      currentFeatures = bg.percentages;
+
+
+      // OUTPUT
+      Path = bg.savePath;
+      Percentages = new List<string>() {"Lowlands & water: " + (Math.Round(currentFeatures[0], 2)).ToString() + "%",
+          "Midlands & Hills: " + (Math.Round(currentFeatures[1], 2)).ToString() + "%",
+          "Highlands & Mountains: " + (Math.Round(currentFeatures[2], 2)).ToString() + "%"};
+
+      Genes = populationGenesList;
+    }
+
+
+  }
+
+  // <Custom additional code> 
+
+  // REFERENCES:
+  // Some of the code in the "L_System" class is inspired from lecture material from Morphogenetic Programming (Semester 2) module taught in the AC MSc at UCL
+  // Some of the code in the GENETIC ALGORITHM classes is inspired from lecture material from Morphogenetic Programming (Semester 2) module taught in the AC MSc at UCL
+  // The code in the "Blur" static method is based on Eric Willis's code. Source: https://gist.github.com/superic/8165746
+  // Note: Willis's code produced artifacts at the edge of bitmaps, resulting in vertical massings in the model, code was altered to remedy this.
+
+
+  // CODE:
+
+
+  // FIELDS:
+
+  public static Random rnd = new Random();
+  // currentFeatures[0] is lowlands & water. currentFeatures[1] is midlands & hills. currentFeatures[2] is highlands & mountains.
+  public double[] currentFeatures = new double[3];
+  // fitnessCriteria is the integer associated with the terrain type to be optimized for
+  public static int fitnessCriteria = 0;
+  // desiredFeatures holds the variables that represent the user's request/specification (lowlands, midlands, highlands)
+  public static double[] desiredFeatures;
+  // List of all the individual fitnesses of L-Systems generated by the GA
+  public static List<double> populationFitnessList = new List<double>();
+  // List of all the genes used by the GA to generate various L-Systems
+  public static List<string> populationGenesList = new List<string>();
+
+
+
+  // METHODS:
+
+
+  // METHOD 1: PERCENT
+  // This static method determines the percent of a value from another value
+  private static double Percent(int current, int cap)
+  {
+    double percent;
+
+    percent = ((double) current / (double) cap) * 100;
+
+    return percent;
+  }
+
+
+  // METHOD 2: GET MAP PERCENTAGES
+  // Static method that gets the percentage of 'lowland' ,'midland' and 'highland' pixels on the bitmap based on their values
+  public static double[] getPercentages(Bitmap bitmap)
+  {
+    double[] percentages = new double[3];
+
+    int numberOfPixels = bitmap.Width * bitmap.Height;
+
+    // 'Lowland' includes water and low-height grass areas
+    int lowlandPixels = 0;
+    // 'Midland' includes mid-height grass and stone areas
+    int hillsPixels = 0;
+    // 'Highland' includes moderate stone peaks and high snow-covered mountains
+    int mountainPixels = 0;
+
+    for (int i = 0; i < bitmap.Width; i++)
+    {
+      for (int j = 0; j < bitmap.Height; j++)
+      {
+        Color currentPixel = bitmap.GetPixel(i, j);
+
+        if(currentPixel.R >= 200) mountainPixels += 1;
+        else if (currentPixel.R == 0) lowlandPixels += 1;
+        else hillsPixels += 1;
+      }
+    }
+
+    double lowlandPercentage = Percent(lowlandPixels, numberOfPixels);
+    double hillsPercentage = Percent(hillsPixels, numberOfPixels);
+    double mountainPercentage = Percent(mountainPixels, numberOfPixels);
+
+    percentages[0] = lowlandPercentage;
+    percentages[1] = hillsPercentage;
+    percentages[2] = mountainPercentage;
+
+    return percentages;
+  }
+
+
+  // METHOD 3: BLUR **
+  // This method blurs an input bitmap by a specified amount
+  private static Bitmap Blur(Bitmap image, int blurSize)
+  {
+    Rectangle rectangle = new Rectangle(0, 0, 128, 128);
+    Bitmap blurred = new Bitmap(image);
+
+    // Iterate through every pixel in the image
+    for (int i = rectangle.X; i < rectangle.X + rectangle.Width; i++)
+    {
+      for (int j = rectangle.Y; j < rectangle.Y + rectangle.Height; j++)
+      {
+        int averageR = 0;
+        int averageG = 0;
+        int averageB = 0;
+
+        int blurPixelCount = 0;
+
+        // Average the brightness of all pixels in the blur area (determined by blurSize)
+        for (int x = i; (x < i + blurSize && x < image.Width); x++)
+        {
+          for (int y = j; (y < j + blurSize && y < image.Height); y++)
+          {
+            // The source code used only pixels from "blurred" bitmap, which often resulted in unwanted artifacts
+            // I opted to create an average between the values from "blurred" and the manipulated image, and the artifacts were corrected
+            Color pixelColourI = image.GetPixel(x, y);
+            Color pixelColourB = blurred.GetPixel(x, y);
+
+            averageR += (int) (pixelColourB.R + pixelColourI.R) / 2;
+            averageG += (int) (pixelColourB.G + pixelColourI.G) / 2;
+            averageB += (int) (pixelColourB.B + pixelColourI.B) / 2;
+
+            blurPixelCount++;
+          }
+        }
+
+        averageR = averageR / blurPixelCount;
+        averageG = averageG / blurPixelCount;
+        averageB = averageB / blurPixelCount;
+
+        // Set each pixel in the bitmap to the new blurred value
+        for (int x = i; x < i + blurSize && x < image.Width && x < rectangle.Width; x++)
+        {
+          for (int y = j; y < j + blurSize && y < image.Height && y < rectangle.Height; y++)
+          {
+            blurred.SetPixel(x, y, Color.FromArgb(averageR, averageG, averageB));
+          }
+        }
+
+      }
+
+    }
+
+    return blurred;
+  }
+
+
+
+  // CLASSES:
+
+  // CLASS 1: BITMAP GENERATOR
+  // This class uses L-Systems to generate a bitmap that will be passed to a world mesh generator.
+  public class BitmapGenerator
+  {
+    // Fields
+    public Bitmap bitmap;
+    public string savePath = Directory.GetCurrentDirectory() + "\\Generated_Map.jpg";
+
+    public double[] percentages = new double[3];
+
+    // Constructor
+    public BitmapGenerator(int bitmapSize)
+    {
+      Bitmap initial = new Bitmap(1, 1);
+      initial.SetPixel(0, 0, Color.Black);
+
+      this.bitmap = new Bitmap(initial, bitmapSize, bitmapSize);
+    }
+
+    // Methods
+
+    // Method that sets the values for bitmap pixels
+    public void generateBitmap()
+    {
+      // Use a genetic algorithm to determine what parameters to use in the L-Systems that generate the height map
+      Population LSystemPopulation = new Population(100, bitmap, fitnessCriteria);
+
+      int numberOfGenerations = 10;
+
+      for (int j = 0; j < numberOfGenerations; j++)
+      {
+        LSystemPopulation.evolve();
+      }
+
+      // Pick the most fit individual from the population, and get the bitmap from its L-System phenotype
+      bitmap = LSystemPopulation.population.Min().phenotype.system.bitmap;
+
+      percentages = getPercentages(bitmap);
+
+
+      // The bitmap has the outline of landmasses (white) on a plain (black)
+      // Blur the bitmap to smooth out brightness values, and create 'slopes'
+      bitmap = Blur(bitmap, 20);
+
+      // Save the bitmap as a jpg in the same directory as this Grasshopper file
+      bitmap.Save(savePath);
+    }
+  }
+
+
+
+
+  // CLASS 2: L-SYSTEM *
+  // This class uses a Lindenmayer system to create pixel formations on a Bitmap
+  public class LSystem
+  {
+    // Fields
+    public Bitmap bitmap;
+
+    private int xPosition;
+    private int yPosition;
+    private int xStep;
+    private int yStep;
+
+    public Dictionary<char, string> rules;
+    public string start;
+    public string alphabet;
+
+    private int iterationCap;
+    private int heightSeparator;
+
+    // Constructor
+    public LSystem(Bitmap bitmap)
+    {
+      this.bitmap = bitmap;
+
+      xStep = 1;
+      yStep = 0;
+
+      // Initial rules and start are similar to Dragon Curve (https://en.wikipedia.org/wiki/Dragon_curve)
+      // The application of these rules (see methods below) is different
+      rules = new Dictionary<char, string>() {{'X', "X+YF+"}, {'Y', "-FX-Y"}};
+      start = "FX";
+    }
+
+
+    // Methods
+
+    // Update the parameters of the L-System
+    public void updateParameters(int iterationCap, int heightSeparator, int xPosition, int yPosition)
+    {
+      this.iterationCap = iterationCap;
+      this.heightSeparator = heightSeparator;
+      this.xPosition = xPosition;
+      this.yPosition = yPosition;
+    }
+
+    // Method that iterates through all characters of the alphabet and applies the system rules to each, updating the alphabet
+    private void updateAlphabet()
+    {
+      string updatedAlphabet = "";
+
+      for (int i = 0; i < alphabet.Length; i++)
+      {
+        char currentCharacter = alphabet[i];
+
+        if(rules.ContainsKey(currentCharacter))
+        {
+          updatedAlphabet += rules[currentCharacter];
+        }
+
+        else
+        {
+          updatedAlphabet += currentCharacter;
+        }
+      }
+
+      alphabet = updatedAlphabet;
+      applyRules();
+    }
+
+    // Method that applies the L-System rules to the Bitmap in a single step
+    private void applyRules()
+    {
+      for (int i = 0; i < alphabet.Length; i++)
+      {
+        char currentSymbol = alphabet[i];
+
+        // The 'F' character moves the current pixel to a new specified position on the bitmap and changes its value
+        if(currentSymbol == 'F')
+        {
+          Color landmassColour;
+
+          if(heightSeparator == 5)
+          {
+            landmassColour = Color.FromArgb(255, 255, 255);
+          }
+
+          else if (heightSeparator == 4)
+          {
+            landmassColour = Color.FromArgb(200, 200, 200);
+          }
+
+          else if (heightSeparator == 3)
+          {
+            landmassColour = Color.FromArgb(150, 150, 150);
+          }
+
+          else if (heightSeparator == 2)
+          {
+            landmassColour = Color.FromArgb(100, 100, 100);
+          }
+
+          else if (heightSeparator == 1)
+          {
+            landmassColour = Color.FromArgb(50, 50, 50);
+          }
+
+          else
+          {
+            landmassColour = Color.FromArgb(0, 0, 0);
+          }
+
+          bitmap.SetPixel(xPosition, yPosition, landmassColour);
+
+          xPosition += xStep;
+          yPosition += yStep;
+
+          if(xPosition >= bitmap.Width) xPosition = 0;
+          if(xPosition < 0) xPosition = bitmap.Width - 1;
+          if(yPosition >= bitmap.Height) yPosition = 0;
+          if(yPosition < 0) yPosition = bitmap.Height - 1;
+
+          bitmap.SetPixel(xPosition, yPosition, landmassColour);
+        }
+
+          // The '+' symbol changes the orientation in which 'F' will perform value changes by 90 degrees clockwise
+        else if(currentSymbol == '+')
+        {
+          if(xStep == 1)
+          {
+            // Right - Bottom orientation
+            if(yStep == 1)
+            {
+              xStep = -1;
+            }
+
+              // Right orientation
+            else if(yStep == 0)
+            {
+              xStep = 0;
+              yStep = 1;
+            }
+
+              // Right - Top orientation
+            else if(yStep == -1)
+            {
+              yStep = 1;
+            }
+          }
+
+          else if(xStep == 0)
+          {
+            // Down orientation
+            if(yStep == 1)
+            {
+              xStep = -1;
+              yStep = 0;
+            }
+
+              // Static
+            else if(yStep == 0)
+            {
+              continue;
+            }
+
+              // Top orientation
+            else if(yStep == -1)
+            {
+              xStep = 1;
+              yStep = 0;
+            }
+          }
+
+          else if(xStep == -1)
+          {
+            // Left - Bottom orientation
+            if(yStep == 1)
+            {
+              yStep = -1;
+            }
+
+              // Left orientation
+            else if(yStep == 0)
+            {
+              xStep = 0;
+              yStep = -1;
+            }
+
+              // Left - Top orientation
+            else if(yStep == -1)
+            {
+              xStep = 1;
+            }
+          }
+
+            // Handle any unforseen cases
+          else
+          {
+            xStep = 0;
+            yStep = 0;
+          }
+        }
+
+          // The '-' symbol changes the orientation in which 'F' will perform value changes by 90 degrees counterclockwise
+        else if(currentSymbol == '-')
+        {
+          if(xStep == 1)
+          {
+            // Right - Bottom orientation
+            if(yStep == 1)
+            {
+              yStep = -1;
+            }
+
+              // Right orientation
+            else if(yStep == 0)
+            {
+              xStep = 0;
+              yStep = -1;
+            }
+
+              // Right - Top orientation
+            else if(yStep == -1)
+            {
+              xStep = -1;
+            }
+          }
+
+          else if(xStep == 0)
+          {
+            // Down orientation
+            if(yStep == 1)
+            {
+              xStep = 1;
+              yStep = 0;
+            }
+
+              // Static
+            else if(yStep == 0)
+            {
+              continue;
+            }
+
+              // Top Orientation
+            else if(yStep == -1)
+            {
+              xStep = -1;
+              yStep = 0;
+            }
+          }
+
+          else if(xStep == -1)
+          {
+            // Left - Bottom orientation
+            if(yStep == 1)
+            {
+              xStep = 1;
+            }
+
+              // Left orientation
+            else if(yStep == 0)
+            {
+              xStep = 0;
+              yStep = 1;
+            }
+
+              // Left - Top orientation
+            else if(yStep == -1)
+            {
+              yStep = 1;
+            }
+          }
+
+            // Handle any unforseen cases
+          else
+          {
+            xStep = 0;
+            yStep = 0;
+          }
+        }
+      }
+    }
+
+    // Method that applies the rules to the bitmap iteratively
+    public void Iterate()
+    {
+      alphabet = start;
+      applyRules();
+
+      for (int i = 0; i < iterationCap; i++)
+      {
+        updateAlphabet();
+      }
+    }
+
+  }
+
+
+
+
+  // GENETIC ALGORITHM CLASSES
+  // These classes used together modify the parameters of the map-generating L-Systems
+
+
+  // CLASS 3: GENOTYPE
+  public class Genotype
+  {
+    // Fields
+    public int[] genes;
+
+    // Constructor
+    public Genotype()
+    {
+      // The gene pool contains 5 genes
+      genes = new int[5];
+
+      // This gene is the iteration cap for L-Systems. It determines the sprawl/spread/surface of landmasses
+      genes[0] = rnd.Next(1, 15);
+      // This gene determines the height of landmasses
+      genes[1] = rnd.Next(6);
+      // This gene is the starting x position of the L-System on the bitmap
+      genes[2] = rnd.Next(128);
+      // This gene is the starting y position of the L-System on the bitmap
+      genes[3] = rnd.Next(128);
+      // This gene determines whether a landmass will be created at all
+      genes[4] = rnd.Next(2);
+    }
+
+    // Methods
+    public void mutate()
+    {
+      // Mutation chance set to 5%
+      if(rnd.NextDouble() < 0.05) genes[0] = rnd.Next(1, 15);
+      if(rnd.NextDouble() < 0.05) genes[1] = rnd.Next(6);
+      if(rnd.NextDouble() < 0.05) genes[2] = rnd.Next(128);
+      if(rnd.NextDouble() < 0.05) genes[3] = rnd.Next(128);
+      if(rnd.NextDouble() < 0.05) genes[4] = rnd.Next(2);
+    }
+
+  }
+
+
+
+
+  // CLASS 4: PHENOTYPE
+  public class Phenotype
+  {
+    // Fields
+    double[] features;
+
+    public LSystem system;
+
+    bool createLSystem;
+    int LSystemIterationCap;
+    int LSystemHeightSeparator;
+    int xPosition;
+    int yPosition;
+
+    // Constructor
+    public Phenotype(Genotype genotype, Bitmap bitmap)
+    {
+      // Create a new L-System based on passed bitmap
+      system = new LSystem(bitmap);
+
+      // Create L-system parameters based on Genotype genes
+      LSystemIterationCap = genotype.genes[0];
+      LSystemHeightSeparator = genotype.genes[1];
+      xPosition = genotype.genes[2];
+      yPosition = genotype.genes[3];
+      createLSystem = (genotype.genes[4] == 1);
+
+      if(createLSystem)
+      {
+        // Update L-System with said parameters
+        system.updateParameters(LSystemIterationCap, LSystemHeightSeparator, xPosition, yPosition);
+
+        // Iterate through successive steps of the L-System with said parameters
+        system.Iterate();
+      }
+
+      // Get quantified results of what sort of map the system generated
+      features = getPercentages(system.bitmap);
+
+    }
+
+    // Methods
+    public double evaluateFitness(int fitnessCriteria)
+    {
+      // Fitness here is determined by how close the generated features (percentages) are to the desired features (percentages)
+      // fitnessCriteria is the integer associated with the desired terrain type
+
+      double fitness = 0.0;
+
+      double lowlandsAccuracy = Math.Abs(desiredFeatures[0] - features[0]);
+      double midlandsAccuracy = Math.Abs(desiredFeatures[1] - features[1]);
+      double highlandsAccuracy = Math.Abs(desiredFeatures[2] - features[2]);
+
+      if(fitnessCriteria == 0) fitness = lowlandsAccuracy;
+      else if(fitnessCriteria == 1) fitness = midlandsAccuracy;
+      else if(fitnessCriteria == 2) fitness = highlandsAccuracy;
+      else fitness = 0;
+
+      return fitness;
+    }
+
+  }
+
+
+
+
+  // CLASS 5: INDIVIDUAL
+  public class Individual : IComparable
+  {
+    // Fields
+    public Genotype genotype;
+    public Phenotype phenotype;
+    public double fitness;
+
+
+    // Constructor
+    public Individual(Bitmap bitmap)
+    {
+      this.genotype = new Genotype();
+      this.phenotype = new Phenotype(genotype, bitmap);
+      this.fitness = 0.0;
+    }
+
+    // Methods
+
+    public void evaluateFitness(int fitnessCriteria)
+    {
+      fitness = phenotype.evaluateFitness(fitnessCriteria);
+    }
+
+    // implementing IComparable functionality to compare elements. Will compare based on fitness.
+    public int CompareTo(Object objI)
+    {
+      Individual iToCompare = (Individual) objI;
+
+      if(fitness < iToCompare.fitness) return -1;
+      else if (fitness > iToCompare.fitness) return 1;
+      else return 0;
+    }
+
+  }
+
+
+
+
+  // CLASS 6: POPULATION
+  public class Population
+  {
+    // Fields
+    public Individual[] population;
+
+    private int numberOfIndividuals;
+    public Bitmap bitmap;
+    public Bitmap[] geneticBitmaps;
+    public int fitnessCriteria;
+
+    // Constructor
+    public Population(int numberOfIndividuals, Bitmap bitmap, int fitnessCriteria)
+    {
+      this.numberOfIndividuals = numberOfIndividuals;
+      this.bitmap = bitmap;
+      this.fitnessCriteria = fitnessCriteria;
+
+      geneticBitmaps = new Bitmap[numberOfIndividuals];
+      population = new Individual[numberOfIndividuals];
+
+      for (int i = 0; i < numberOfIndividuals; i++)
+      {
+        geneticBitmaps[i] = new Bitmap(bitmap);
+        population[i] = new Individual(geneticBitmaps[i]);
+        population[i].evaluateFitness(fitnessCriteria);
+      }
+
+      // Sorting via IComparable functionality from Individual
+      Array.Sort(population);
+    }
+
+    // Methods
+
+    // Method that generates child individuals, evaluates, and re-sorts the population absed on fitness
+    public void evolve()
+    {
+      Individual parent1;
+      Individual parent2;
+      Individual child;
+
+      populationFitnessList.Clear();
+      populationGenesList.Clear();
+
+
+      for (int i = 0; i < numberOfIndividuals; i++)
+      {
+        parent1 = selectIndividual();
+        parent2 = selectIndividual();
+
+        child = Evolution.breed(parent1, parent2, geneticBitmaps[i]);
+
+        // Introduce child in the population, evaluate its fitness, and stort the population
+        population[i] = child;
+        population[i].evaluateFitness(fitnessCriteria);
+
+        // Store population data
+        populationFitnessList.Add(child.fitness);
+        populationGenesList.Add(child.genotype.genes[0].ToString() + ", " + child.genotype.genes[1].ToString() + ", " +
+          child.genotype.genes[2].ToString() + ", " + child.genotype.genes[3].ToString() + ", " + child.genotype.genes[4].ToString());
+
+        Array.Sort(population);
+      }
+
+    }
+
+    // Method that randomly selects an individual from the population
+    public Individual selectIndividual()
+    {
+      int index = (int) Math.Floor(((double) numberOfIndividuals - 0.001) * (1.0 - Math.Pow(rnd.NextDouble(), 2)));
+
+      Individual selected = population[index];
+
+      return selected;
+    }
+  }
+
+
+
+  // CLASS 7: EVOLUTION
+  public static class Evolution
+  {
+    // Methods
+
+    // This method implements crossover functionality for 2 Genotype instances
+    public static Genotype crossover (Genotype genotype1, Genotype genotype2)
+    {
+      Genotype resultingGenotype = new Genotype();
+
+      for (int i = 0; i < resultingGenotype.genes.Length; i++)
+      {
+        if(rnd.Next(100) < 50) resultingGenotype.genes[i] = genotype1.genes[i];
+        else resultingGenotype.genes[i] = genotype2.genes[i];
+      }
+
+      return resultingGenotype;
+    }
+
+
+    // This method uses crossover to create a child Individual from 2 given parent Individuals
+    public static Individual breed(Individual parent1, Individual parent2, Bitmap bitmap)
+    {
+      Individual child = new Individual(bitmap);
+
+      child.genotype = crossover(parent1.genotype, parent2.genotype);
+      child.genotype.mutate();
+
+      child.phenotype = new Phenotype(child.genotype, bitmap);
+
+      return child;
+    }
+  }
+
+
+
+  // </Custom additional code> 
+}
