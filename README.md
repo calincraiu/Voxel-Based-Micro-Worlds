@@ -2,7 +2,7 @@
  Genetic Algorithms, L-Systems, Heightmap Generation, Mesh Optimization, Voxels
  
 <p align="center">
-  <img width="1840" height="1000" src="https://github.com/calincraiu/Voxel-Based-Micro-Worlds/blob/main/images/Micro_Worlds.gif">
+  <img src="https://github.com/calincraiu/Voxel-Based-Micro-Worlds/blob/main/images/Micro-Worlds-GIF.gif">
 </p>
  
  ## Dependencies  
