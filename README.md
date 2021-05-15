@@ -1,7 +1,9 @@
 # Voxel-Based Micro Worlds
  Genetic Algorithms, L-Systems, Heightmap Generation, Mesh Optimization, Voxels
  
- ![persp](https://github.com/calincraiu/Voxel-Based-Micro-Worlds/blob/main/images/Shaded_3.jpg)
+<p align="center">
+  <img width="1840" height="1000" src="https://github.com/calincraiu/Voxel-Based-Micro-Worlds/blob/main/images/Micro_Worlds.gif">
+</p>
  
  ## Dependencies  
  This project was created using the [Grasshopper SDK](https://developer.rhino3d.com/api/grasshopper/html/723c01da-9986-4db2-8f53-6f3a7494df75.htm) inside [Rhinoceros 3D](https://www.rhino3d.com/) (version: Rhino7). The language used to create the custom GH components is C#. 
