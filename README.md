@@ -12,9 +12,10 @@
  
  
  Notes:  
- - Other Rhino versions might work, but it is important to mention that before Rhino 6.0, Grasshopper was not part of the standard toolkit and had to be downloaded as a plugin.  
+ - Other Rhino versions might work, but it is important to mention that before Rhino 6.0, Grasshopper was not part of the standard toolkit and had to be downloaded as a plugin. 
  -  Upon opening the Grasshopper definition, the custom components will attempt to generate a "Voxel-Based Micro World", process which might slow down the file upon opening. Give it a few seconds. 
  -  The Grasshopper file creates a single .jpg in the directory that it is placed in when running. This is the generated heightmap to be used for Voxel-World generation.
+ -  The provided code is structured in a way that is compatible with GH components. Objects are defined under "custom additional code" and called under "RUNTIME CODE".
  
  ## Relevant Files
 The provided working file can be found inside [GH_definition](https://github.com/calincraiu/Voxel-Based-Micro-Worlds/tree/main/GH_definition).
@@ -32,7 +33,7 @@ Normally, procedural terrain generation is approached by implementing a noise fu
 However, this is laborious work, and therefore, in this implementation, Genetic algorithms have been used as a means of automating and optimizing the placement of said landmasses. A user would be prompted to specify a percentage and a terrain type to optimize, and the GA would provide a solution. There are numerous possible configurations of voxels in the parameter hyperspace, therefore the GA can provide different optimal solutions to the same input parameters.  
  </p>  
  
-## Notes  
+## End Notes  
 <p align="justify">
 This project was created close to the start of my programming journey, therefore the code could use some improvement. Feel free to contact me with suggestions.
 </p>  
